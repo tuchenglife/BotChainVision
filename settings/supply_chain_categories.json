@@ -19,6 +19,12 @@
       "reference_pe": 18
     },
     {
+      "id": "com_som",
+      "name": "CoM/SOM 運算模組 (工業電腦)",
+      "component_examples": "機器人主控運算模組、邊緣 AI、ROS2 控制器",
+      "reference_pe": 22
+    },
+    {
       "id": "vision",
       "name": "AI 視覺/感測 (光學/電子)",
       "component_examples": "LiDAR、深度相機、RGB 相機",

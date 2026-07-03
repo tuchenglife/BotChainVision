@@ -63,6 +63,7 @@ CATEGORY_ICONS = {
     "drivetrain": "⚙️",
     "motor": "🔌",
     "pcb": "🖥️",
+    "com_som": "💻",
     "vision": "👁️",
     "structure": "🏗️",
 }
