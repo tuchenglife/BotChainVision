@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 ASSETS = ROOT / "assets"
 
 from src.category_pe import fair_pe_label, reference_pe_for_category, reference_pe_map
-from src.config import SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL, load_categories, load_vendors
+from src.config import SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL, load_categories
 from src.db import (
     fetch_dividends,
     fetch_eps,
@@ -23,8 +23,9 @@ from src.db import (
     get_client,
     latest_sync,
 )
+from src.eps_dividend_chart import build_five_year_rows, summary_caption
 from src.fundamentals import fetch_extended_fundamentals
-from src.symbol_resolver import resolve_yfinance_symbol, unique_resolved_tickers
+from src.symbol_resolver import unique_resolved_tickers
 from src.sync import run_full_sync
 from src.valuation import (
     assessment_style,
@@ -115,6 +116,7 @@ def _chg_style(val) -> str:
 
 
 def build_overview_rows(client, meta: dict) -> list[dict]:
+    cat_map = {c["id"]: c for c in load_categories()}
     rows = []
     for ticker in unique_resolved_tickers():
         prices = fetch_prices(client, ticker, limit=2)
@@ -123,13 +125,17 @@ def build_overview_rows(client, meta: dict) -> list[dict]:
         supply_chain = primary_category(ticker, meta)
         cat_id = primary_category_id(ticker, meta)
         ref_pe = reference_pe_for_category(cat_id)
+        ticker_code = meta.get(ticker, {}).get("ticker_code", "")
+        component_examples = cat_map.get(cat_id or "", {}).get("component_examples", "")
 
         if not prices:
             rows.append(
                 {
                     "ticker": ticker,
                     "公司名稱": company,
+                    "代號": ticker_code,
                     "供應鏈環節": supply_chain,
+                    "元件範例": component_examples,
                     "參考PE": ref_pe,
                 }
             )
@@ -157,7 +163,9 @@ def build_overview_rows(client, meta: dict) -> list[dict]:
             {
                 "ticker": ticker,
                 "公司名稱": company,
+                "代號": ticker_code,
                 "供應鏈環節": supply_chain,
+                "元件範例": component_examples,
                 "收盤": close,
                 "前一天收盤": prev_close,
                 "漲跌%": round(chg, 2) if chg is not None else None,
@@ -193,11 +201,21 @@ def render_sidebar(meta: dict) -> tuple[str | None, str | None]:
     )
 
     filtered = tickers_in_category(selected_cat, meta) or list(meta.keys())
+    if "selected_ticker" not in st.session_state or st.session_state.selected_ticker not in filtered:
+        st.session_state.selected_ticker = filtered[0] if filtered else None
+
+    default_idx = (
+        filtered.index(st.session_state.selected_ticker)
+        if st.session_state.selected_ticker in filtered
+        else 0
+    )
     selected_ticker = st.sidebar.selectbox(
         "選擇公司",
         options=filtered,
+        index=default_idx,
         format_func=lambda s: ticker_select_label(s, meta),
     )
+    st.session_state.selected_ticker = selected_ticker
 
     st.sidebar.divider()
     st.sidebar.caption("合理價 = EPS × 該環節參考本益比（見「說明」分頁）")
@@ -229,9 +247,9 @@ def render_refresh_bar():
                 st.error(f"更新失敗：{exc}")
 
 
-def render_screener(meta: dict, cat_filter: str | None):
-    st.subheader("投資總覽｜價值篩選")
-    st.caption("合理價依供應鏈環節使用不同參考本益比")
+def render_supply_chain_overview(meta: dict, cat_filter: str | None):
+    st.subheader("供應鏈總覽")
+    st.caption("點選表格中的公司列，將自動跳至「個股深度」｜合理價依供應鏈環節使用不同參考本益比")
 
     try:
         client = db_client()
@@ -241,6 +259,10 @@ def render_screener(meta: dict, cat_filter: str | None):
         return
 
     df = pd.DataFrame(rows)
+    if df.empty:
+        st.info("尚無資料，請按「立即更新」。")
+        return
+
     if cat_filter and cat_filter != "all":
         cat_name = category_short_name(
             next((c["name"] for c in load_categories() if c["id"] == cat_filter), "")
@@ -249,7 +271,7 @@ def render_screener(meta: dict, cat_filter: str | None):
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        sort_by = st.selectbox("排序", ["價格評價", "距MA20%", "本益比", "ROE%", "殖利率%", "公司名稱"])
+        sort_by = st.selectbox("排序", ["供應鏈環節", "價格評價", "距MA20%", "本益比", "ROE%", "殖利率%", "公司名稱"])
     with c2:
         show_only = st.multiselect("篩選評價", ["偏低", "合理", "偏高"], default=["偏低", "合理", "偏高"])
     with c3:
@@ -263,7 +285,9 @@ def render_screener(meta: dict, cat_filter: str | None):
     if sort_by == "價格評價" and "價格評價" in df.columns:
         order = {"偏低": 0, "合理": 1, "偏高": 2, "—": 3}
         df["_sort"] = df["價格評價"].map(order).fillna(9)
-        df = df.sort_values("_sort").drop(columns="_sort")
+        df = df.sort_values(["_sort", "供應鏈環節", "公司名稱"]).drop(columns="_sort")
+    elif sort_by == "供應鏈環節":
+        df = df.sort_values(["供應鏈環節", "公司名稱"], na_position="last")
     else:
         df = df.sort_values(
             by=sort_by if sort_by in df.columns else "公司名稱",
@@ -272,10 +296,11 @@ def render_screener(meta: dict, cat_filter: str | None):
         )
 
     display_cols = [
-        "公司名稱", "供應鏈環節", "收盤", "漲跌%", "距MA20%", "距MA60%",
-        "均線位置", "本益比", "參考PE", "ROE%", "合理價參考", "價格評價", "短線狀態", "殖利率%",
+        "公司名稱", "代號", "供應鏈環節", "元件範例",
+        "收盤", "漲跌%", "距MA20%", "距MA60%", "均線位置",
+        "本益比", "參考PE", "ROE%", "合理價參考", "價格評價", "短線狀態", "殖利率%",
     ]
-    view = df[[c for c in display_cols if c in df.columns]]
+    view = df[[c for c in display_cols if c in df.columns]].reset_index(drop=True)
 
     fmt = {
         "收盤": "{:.2f}", "漲跌%": "{:+.2f}", "距MA20%": "{:+.2f}", "距MA60%": "{:+.2f}",
@@ -287,7 +312,23 @@ def render_screener(meta: dict, cat_filter: str | None):
     styled = styled.map(assessment_style, subset=["價格評價"])
     if "短線狀態" in view.columns:
         styled = styled.map(_signal_style, subset=["短線狀態"])
-    st.dataframe(styled, use_container_width=True, hide_index=True)
+
+    selection = st.dataframe(
+        styled,
+        use_container_width=True,
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        key="supply_chain_overview_df",
+    )
+
+    if selection.selection.rows:
+        row_idx = selection.selection.rows[0]
+        picked = df.iloc[row_idx]["ticker"]
+        if st.session_state.get("selected_ticker") != picked:
+            st.session_state.selected_ticker = picked
+            st.session_state.page = "📈 個股深度"
+            st.rerun()
 
     low_df = df[df["價格評價"] == "偏低"].head(5)
     if not low_df.empty:
@@ -306,6 +347,7 @@ def render_stock_detail(ticker: str, meta: dict):
     cat_id = primary_category_id(ticker, meta)
     ref_pe = reference_pe_for_category(cat_id)
     pe_label = fair_pe_label(cat_id)
+    key_tag = ticker
 
     st.subheader(company)
     st.caption(f"`{meta.get(ticker, {}).get('ticker_code', '')}` · {ticker} · 📂 {cat_short} · 參考PE **{ref_pe:g}**")
@@ -359,17 +401,106 @@ def render_stock_detail(ticker: str, meta: dict):
     st.plotly_chart(
         price_chart(prices, fair_eps=fair_eps, fair_52w=fair_52w, fair_label=pe_label),
         use_container_width=True,
+        key=f"price_chart_{key_tag}",
     )
 
-    col_l, col_r = st.columns(2)
-    with col_l:
-        if yields:
-            st.plotly_chart(yield_chart(yields), use_container_width=True)
-    with col_r:
-        if dividends:
-            st.dataframe(pd.DataFrame(dividends)[["ex_date", "cash_dividend"]], hide_index=True)
-    if eps_rows:
-        st.dataframe(pd.DataFrame(eps_rows)[["fiscal_period", "eps"]], hide_index=True)
+    fy_rows = build_five_year_rows(eps_rows, dividends)
+    if fy_rows:
+        st.markdown("#### 近五年 EPS × 現金股利")
+        st.caption(summary_caption(fy_rows))
+        st.plotly_chart(
+            eps_dividend_plot(fy_rows),
+            use_container_width=True,
+            key=f"eps_div_chart_{key_tag}",
+        )
+        summary_df = pd.DataFrame(
+            [
+                {
+                    "年度": r["year"],
+                    "EPS": r["eps_label"] or (f"{r['eps']:.2f}" if r["eps"] is not None else "—"),
+                    "現金股利": f"{r['dividend']:.2f}" if r["dividend"] is not None else "—",
+                    "配息率%": f"{r['payout_pct']:.1f}" if r["payout_pct"] is not None else "—",
+                }
+                for r in fy_rows
+            ]
+        )
+        st.dataframe(summary_df, hide_index=True, use_container_width=True, key=f"eps_div_summary_{key_tag}")
+
+    with st.expander("原始股利 / EPS 資料"):
+        raw_l, raw_r = st.columns(2)
+        with raw_l:
+            st.markdown("**現金股利**")
+            if dividends:
+                st.dataframe(
+                    pd.DataFrame(dividends)[["ex_date", "cash_dividend"]],
+                    hide_index=True,
+                    key=f"dividends_{key_tag}",
+                )
+            else:
+                st.caption("尚無股利資料")
+        with raw_r:
+            st.markdown("**季度 EPS**")
+            if eps_rows:
+                st.dataframe(
+                    pd.DataFrame(eps_rows)[["fiscal_period", "period_end", "eps"]],
+                    hide_index=True,
+                    key=f"eps_{key_tag}",
+                )
+            else:
+                st.caption("尚無 EPS 資料")
+
+
+def eps_dividend_plot(rows: list[dict]) -> go.Figure:
+    years = [str(r["year"]) for r in rows]
+    eps_vals = [r["eps"] for r in rows]
+    div_vals = [r["dividend"] for r in rows]
+    payout_vals = [r["payout_pct"] for r in rows]
+    eps_text = [
+        (r["eps_label"] or "") if r.get("is_ytd") else ""
+        for r in rows
+    ]
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    fig.add_trace(
+        go.Bar(
+            name="EPS",
+            x=years,
+            y=eps_vals,
+            marker_color="#2563eb",
+            text=eps_text,
+            textposition="outside",
+        ),
+        secondary_y=False,
+    )
+    fig.add_trace(
+        go.Bar(
+            name="現金股利",
+            x=years,
+            y=div_vals,
+            marker_color="#f59e0b",
+        ),
+        secondary_y=False,
+    )
+    fig.add_trace(
+        go.Scatter(
+            name="配息率%",
+            x=years,
+            y=payout_vals,
+            mode="lines+markers",
+            line=dict(color="#22c55e", width=2),
+            marker=dict(size=7),
+        ),
+        secondary_y=True,
+    )
+    fig.update_layout(
+        height=360,
+        barmode="group",
+        legend=dict(orientation="h"),
+        margin=dict(l=20, r=20, t=30, b=20),
+    )
+    fig.update_yaxes(title_text="元", secondary_y=False)
+    fig.update_yaxes(title_text="配息率 %", secondary_y=True)
+    return fig
 
 
 def price_chart(
@@ -398,45 +529,11 @@ def price_chart(
     return fig
 
 
-def yield_chart(yields: list[dict]) -> go.Figure:
-    df = pd.DataFrame(yields).sort_values("trade_date")
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df["trade_date"], y=df["dividend_yield_pct"], fill="tozeroy"))
-    fig.update_layout(height=260, margin=dict(l=20, r=20, t=20, b=20))
-    return fig
-
-
 def render_component_map():
     st.subheader("人形機器人元件分布")
     if (ASSETS / "robot_components.png").exists():
         st.image(str(ASSETS / "robot_components.png"), use_container_width=True)
-    cat_map = {c["id"]: c for c in load_categories()}
-    rows = [
-        {
-            "環節": category_short_name(cat_map.get(v["category_id"], {}).get("name", "")),
-            "參考PE": reference_pe_for_category(v["category_id"]),
-            "元件範例": cat_map.get(v["category_id"], {}).get("component_examples", ""),
-            "公司": v["company"],
-            "代號": v["ticker"],
-        }
-        for v in load_vendors()
-    ]
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
-
-def render_supply_chain():
-    st.subheader("供應鏈地圖")
-    meta = build_ticker_meta()
-    for cat in load_categories():
-        icon = CATEGORY_ICONS.get(cat["id"], "📦")
-        with st.expander(f"{icon} {cat['name']}（參考PE {cat.get('reference_pe', 18)}）"):
-            st.markdown(f"**元件：** {cat['component_examples']}")
-            rows = [
-                {"公司": company_for(resolve_yfinance_symbol(v["ticker"], v.get("market", "TW")), meta), "代號": v["ticker"]}
-                for v in load_vendors()
-                if v["category_id"] == cat["id"]
-            ]
-            st.dataframe(pd.DataFrame(rows), hide_index=True)
+    st.caption("完整供應鏈與股價指標請至「供應鏈總覽」分頁查看。")
 
 
 def render_about():
@@ -461,6 +558,10 @@ def main():
     if not _check_config():
         return
 
+    pages = ["📊 供應鏈總覽", "🤖 元件分布", "📈 個股深度", "❓ 說明"]
+    if "page" not in st.session_state:
+        st.session_state.page = pages[0]
+
     meta = build_ticker_meta()
     cat_filter, selected_ticker = render_sidebar(meta)
 
@@ -469,21 +570,25 @@ def main():
     render_refresh_bar()
     st.divider()
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        ["📊 投資總覽", "🤖 元件分布", "🔗 供應鏈", "📈 個股深度", "❓ 說明"]
+    page = st.radio(
+        "頁面",
+        pages,
+        index=pages.index(st.session_state.page) if st.session_state.page in pages else 0,
+        horizontal=True,
+        label_visibility="collapsed",
     )
-    with tab1:
-        render_screener(meta, cat_filter)
-    with tab2:
+    st.session_state.page = page
+
+    if page == pages[0]:
+        render_supply_chain_overview(meta, cat_filter)
+    elif page == pages[1]:
         render_component_map()
-    with tab3:
-        render_supply_chain()
-    with tab4:
+    elif page == pages[2]:
         if selected_ticker:
             render_stock_detail(selected_ticker, meta)
         else:
-            st.info("請從左側欄選擇公司")
-    with tab5:
+            st.info("請從「供應鏈總覽」表格點選公司列")
+    else:
         render_about()
 
 
