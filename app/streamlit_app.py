@@ -24,23 +24,21 @@ from src.db import (
     get_client,
     latest_sync,
 )
-from src.eps_dividend_chart import (
-    build_five_year_rows,
-    expected_dividend_yield_pct,
-    last_payout_ratio,
-    summary_caption,
-    trailing_four_quarters_eps,
-)
 from src.fundamentals import fetch_extended_fundamentals
 from src.symbol_resolver import unique_resolved_tickers
 from src.sync import run_full_sync
 from src.valuation import (
     assessment_style,
+    build_five_year_rows,
+    expected_dividend_yield_pct,
     fair_value_52w_mid,
     fair_value_by_eps,
+    last_payout_ratio,
     ma_position_label,
     pct_vs,
     price_assessment,
+    summary_caption,
+    trailing_four_quarters_eps,
 )
 from src.vendor_meta import build_ticker_meta, categories_for, company_for
 from src.ux_helpers import (
