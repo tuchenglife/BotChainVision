@@ -1,7 +1,28 @@
 """Category helpers for UX grouping."""
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from src.config import load_categories, load_vendors
 from src.symbol_resolver import resolve_yfinance_symbol
+
+TW = ZoneInfo("Asia/Taipei")
+
+
+def format_tw_datetime(iso_str: str | None) -> str:
+    """Format UTC/offset ISO timestamp for display in Taiwan time."""
+    if not iso_str:
+        return "—"
+    text = iso_str.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return iso_str[:19]
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+    return dt.astimezone(TW).strftime("%Y-%m-%d %H:%M")
 
 
 def category_options() -> list[dict]:

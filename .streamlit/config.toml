@@ -5,6 +5,12 @@ secondaryBackgroundColor = "#1e293b"
 textColor = "#f8fafc"
 font = "sans serif"
 
+[global]
+developmentMode = false
+
+[client]
+toolbarMode = "viewer"
+
 [server]
 headless = true
 

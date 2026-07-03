@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Import before adding project root — ./supabase/ migrations must not shadow the PyPI package.
 from supabase import Client, create_client  # noqa: F401
@@ -39,6 +40,7 @@ from src.vendor_meta import build_ticker_meta, categories_for, company_for
 from src.ux_helpers import (
     category_options,
     category_short_name,
+    format_tw_datetime,
     primary_category,
     primary_category_id,
     ticker_select_label,
@@ -232,7 +234,7 @@ def render_refresh_bar():
         try:
             last = latest_sync(db_client())
             if last:
-                st.caption(f"上次同步：{last.get('finished_at', '')[:19]}")
+                st.caption(f"上次同步：{format_tw_datetime(last.get('finished_at'))}（台灣時間）")
         except Exception:
             st.caption("尚未同步")
 
@@ -554,10 +556,38 @@ def render_about():
     )
 
 
+def _suppress_clear_cache_hotkey():
+    """Avoid Streamlit 'C' clear-cache dialog when copying text (Ctrl/Cmd+C)."""
+    components.html(
+        """
+        <script>
+        (function () {
+          const doc = window.parent.document;
+          if (doc._bcvHotkeyGuard) return;
+          doc._bcvHotkeyGuard = true;
+          doc.addEventListener('keydown', function (e) {
+            if (e.key !== 'c' && e.key !== 'C') return;
+            if (e.ctrlKey || e.metaKey) {
+              e.stopImmediatePropagation();
+              return;
+            }
+            const sel = doc.getSelection && doc.getSelection();
+            if (sel && sel.toString().length > 0) {
+              e.stopImmediatePropagation();
+            }
+          }, true);
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
+
 def main():
     if not _check_config():
         return
 
+    _suppress_clear_cache_hotkey()
     pages = ["📊 供應鏈總覽", "🤖 元件分布", "📈 個股深度", "❓ 說明"]
     if "page" not in st.session_state:
         st.session_state.page = pages[0]
