@@ -4,7 +4,6 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import pandas as pd
-import yfinance as yf
 
 from src.config import load_categories, load_vendors
 from src.db import fetch_max_trade_date, get_client, log_sync, upsert_rows
@@ -36,6 +35,8 @@ def _normalize_index(df: pd.DataFrame) -> pd.DataFrame:
 
 def fetch_history(ticker: str, days: int = 90) -> pd.DataFrame:
     """Fetch OHLCV; uses start date for windows longer than 730 days."""
+    import yfinance as yf
+
     t = yf.Ticker(ticker)
     if days > 730:
         start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
@@ -43,6 +44,16 @@ def fetch_history(ticker: str, days: int = 90) -> pd.DataFrame:
     else:
         df = t.history(period=f"{days}d", auto_adjust=True)
     return _normalize_index(df)
+
+
+def fetch_history_with_fallback(ticker: str, days: int = 90) -> pd.DataFrame:
+    """Try alternate TW/TWO suffix if primary returns empty."""
+    df = fetch_history(ticker, days=days)
+    if not df.empty or "." not in ticker:
+        return df
+    code, suffix = ticker.rsplit(".", 1)
+    alt = f"{code}.TWO" if suffix.upper() == "TW" else f"{code}.TW"
+    return fetch_history(alt, days=days)
 
 
 def _resolve_fetch_days(client, ticker: str, backfill_days: int) -> int:
@@ -93,7 +104,7 @@ def sync_daily_prices(
     for ticker in tickers:
         try:
             fetch_days = _resolve_fetch_days(client, ticker, backfill_days)
-            df = fetch_history(ticker, days=fetch_days)
+            df = fetch_history_with_fallback(ticker, days=fetch_days)
             if df.empty:
                 errors.append(f"{ticker}: no data")
                 continue
@@ -147,6 +158,8 @@ def sync_dividends(client, tickers: list[str] | None = None) -> list[dict[str, A
 
     for ticker in tickers:
         try:
+            import yfinance as yf
+
             divs = yf.Ticker(ticker).dividends
             if divs is None or divs.empty:
                 continue
@@ -231,6 +244,8 @@ def sync_historical_eps(client, tickers: list[str] | None = None) -> list[dict[s
 
     for ticker in tickers:
         try:
+            import yfinance as yf
+
             t = yf.Ticker(ticker)
             income = t.quarterly_income_stmt
             if income is not None and not income.empty and "Basic EPS" in income.index:

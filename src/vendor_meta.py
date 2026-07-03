@@ -13,7 +13,9 @@ def build_ticker_meta() -> dict[str, dict]:
     meta: dict[str, dict] = {}
 
     for v in load_vendors():
-        sym = resolve_yfinance_symbol(v["ticker"], v.get("market", "TW"))
+        sym = resolve_yfinance_symbol(
+            v["ticker"], v.get("market", "TW"), v.get("yfinance_symbol")
+        )
         cat_label = cat_names.get(v["category_id"], v["category_id"])
         if sym not in meta:
             meta[sym] = {"company": v["company"], "ticker_code": v["ticker"], "categories": []}

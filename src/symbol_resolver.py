@@ -1,55 +1,50 @@
-"""Resolve working yfinance symbol for Taiwan stocks (TW vs TWO)."""
+"""Resolve yfinance symbol for Taiwan stocks — no network calls (safe for Streamlit startup)."""
 
 from __future__ import annotations
 
-import yfinance as yf
+from src.config import load_vendors, to_yfinance_symbol
 
-from src.config import to_yfinance_symbol
+# Verified via yfinance testing (TW vs TWO)
+_KNOWN: dict[str, str] = {
+    "1597": "1597.TW",
+    "4576": "4576.TW",
+    "4571": "4571.TW",
+    "1536": "1536.TW",
+    "6215": "6215.TW",
+    "5371": "5371.TWO",
+    "3362": "3362.TWO",
+    "4510": "4510.TWO",
+}
 
-# ticker -> working yfinance symbol (populated at runtime)
 _RESOLVED: dict[str, str] = {}
 
 
-def _has_data(symbol: str) -> bool:
-    try:
-        df = yf.Ticker(symbol).history(period="5d", auto_adjust=True)
-        return df is not None and not df.empty
-    except Exception:
-        return False
-
-
-def resolve_yfinance_symbol(ticker: str, market: str = "TW") -> str:
-    """Return yfinance symbol that returns price data; tries TW and TWO."""
-    cache_key = ticker
-    if cache_key in _RESOLVED:
-        return _RESOLVED[cache_key]
-
-    candidates: list[str] = []
-    primary = to_yfinance_symbol(ticker, market)
-    candidates.append(primary)
-    for suffix in ("TW", "TWO"):
-        sym = f"{ticker}.{suffix}"
-        if sym not in candidates:
-            candidates.append(sym)
-
-    for sym in candidates:
-        if _has_data(sym):
-            _RESOLVED[cache_key] = sym
-            return sym
-
-    _RESOLVED[cache_key] = primary
-    return primary
+def resolve_yfinance_symbol(ticker: str, market: str = "TW", yfinance_symbol: str | None = None) -> str:
+    """Map numeric ticker to yfinance symbol using settings override or known table."""
+    if yfinance_symbol:
+        return yfinance_symbol
+    if ticker in _RESOLVED:
+        return _RESOLVED[ticker]
+    if ticker in _KNOWN:
+        sym = _KNOWN[ticker]
+        _RESOLVED[ticker] = sym
+        return sym
+    sym = to_yfinance_symbol(ticker, market)
+    _RESOLVED[ticker] = sym
+    return sym
 
 
 def unique_resolved_tickers(vendors: list[dict] | None = None) -> list[str]:
-    from src.config import load_vendors
-
     if vendors is None:
         vendors = load_vendors()
     seen: set[str] = set()
     result: list[str] = []
     for v in vendors:
-        sym = resolve_yfinance_symbol(v["ticker"], v.get("market", "TW"))
+        sym = resolve_yfinance_symbol(
+            v["ticker"],
+            v.get("market", "TW"),
+            v.get("yfinance_symbol"),
+        )
         if sym not in seen:
             seen.add(sym)
             result.append(sym)
