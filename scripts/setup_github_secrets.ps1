@@ -19,9 +19,9 @@ if (-not $vars['SUPABASE_URL'] -or -not $vars['SUPABASE_SERVICE_ROLE_KEY']) {
 }
 
 Write-Host "Setting SUPABASE_URL..."
-$vars['SUPABASE_URL'] | gh secret set SUPABASE_URL --body-file -
+$vars['SUPABASE_URL'] | gh secret set SUPABASE_URL
 
 Write-Host "Setting SUPABASE_SERVICE_ROLE_KEY..."
-$vars['SUPABASE_SERVICE_ROLE_KEY'] | gh secret set SUPABASE_SERVICE_ROLE_KEY --body-file -
+$vars['SUPABASE_SERVICE_ROLE_KEY'] | gh secret set SUPABASE_SERVICE_ROLE_KEY
 
 Write-Host "Done. Verify at: https://github.com/tuchenglife/BotChainVision/settings/secrets/actions"
