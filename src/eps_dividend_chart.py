@@ -100,3 +100,47 @@ def summary_caption(rows: list[dict[str, Any]]) -> str:
     if ytd and ytd.get("through_quarter"):
         return f"今年 EPS 累計截至 {ytd['through_quarter']}｜股利歸屬前一年度 EPS"
     return "股利歸屬前一年度 EPS（例：2025/7 發放 → 2024 EPS）"
+
+
+def trailing_four_quarters_eps(eps_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Sum EPS from the four most recent fiscal quarters."""
+    if not eps_rows:
+        return {"ttm_eps": None, "quarters": [], "periods": "", "complete": False}
+
+    unique: dict[str, dict[str, Any]] = {}
+    for row in eps_rows:
+        fp = row.get("fiscal_period") or row.get("period_end") or ""
+        if fp and fp not in unique:
+            unique[fp] = row
+
+    ordered = sorted(unique.values(), key=lambda r: r.get("period_end") or "", reverse=True)
+    last4 = ordered[:4]
+    ttm = sum(float(r["eps"]) for r in last4 if r.get("eps") is not None)
+    periods = " + ".join(r.get("fiscal_period", "?") for r in reversed(last4))
+
+    return {
+        "ttm_eps": round(ttm, 4) if last4 else None,
+        "quarters": last4,
+        "periods": periods,
+        "complete": len(last4) == 4,
+    }
+
+
+def last_payout_ratio(fy_rows: list[dict[str, Any]]) -> float | None:
+    """Most recent full-year payout ratio from EPS × dividend history."""
+    completed = [r for r in fy_rows if not r.get("is_ytd") and r.get("payout_pct") is not None]
+    if not completed:
+        return None
+    return float(completed[-1]["payout_pct"])
+
+
+def expected_dividend_yield_pct(
+    ttm_eps: float | None,
+    close: float,
+    payout_pct: float | None,
+) -> float | None:
+    """Expected yield = (TTM EPS × payout%) / close × 100."""
+    if not ttm_eps or ttm_eps <= 0 or close <= 0 or payout_pct is None:
+        return None
+    expected_div = ttm_eps * payout_pct / 100
+    return round(expected_div / close * 100, 2)

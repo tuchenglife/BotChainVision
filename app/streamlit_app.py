@@ -24,7 +24,13 @@ from src.db import (
     get_client,
     latest_sync,
 )
-from src.eps_dividend_chart import build_five_year_rows, summary_caption
+from src.eps_dividend_chart import (
+    build_five_year_rows,
+    expected_dividend_yield_pct,
+    last_payout_ratio,
+    summary_caption,
+    trailing_four_quarters_eps,
+)
 from src.fundamentals import fetch_extended_fundamentals
 from src.symbol_resolver import unique_resolved_tickers
 from src.sync import run_full_sync
@@ -388,6 +394,12 @@ def render_stock_detail(ticker: str, meta: dict):
         close, pe, vs_ma20, vs_ma60, fair_eps, fund.get("roe"), reference_pe=ref_pe
     )
 
+    fy_rows = build_five_year_rows(eps_rows, dividends)
+    ttm = trailing_four_quarters_eps(eps_rows)
+    ttm_eps = ttm.get("ttm_eps")
+    payout_ref = last_payout_ratio(fy_rows) if fy_rows else None
+    expected_yield = expected_dividend_yield_pct(ttm_eps, close, payout_ref)
+
     v1, v2, v3, v4, v5 = st.columns(5)
     v1.metric("價格評價", assessment)
     v2.metric("距 MA20", f"{vs_ma20:+.1f}%" if vs_ma20 is not None else "—")
@@ -395,15 +407,29 @@ def render_stock_detail(ticker: str, meta: dict):
     v4.metric(f"合理價({pe_label})", f"{fair_eps:.2f}" if fair_eps else "—")
     v5.metric("52週中位", f"{fair_52w:.2f}" if fair_52w else "—")
 
-    c1, c2, c3, c4, c5, c6, c7, c8 = st.columns(8)
+    c1, c2, c3, c4, c5, c6, c7, c8, c9, c10 = st.columns(10)
     c1.metric("收盤", f"{close:.2f}")
     c2.metric("MA5", f"{latest['ma5']:.2f}" if latest.get("ma5") else "—")
     c3.metric("MA20", f"{ma20:.2f}" if ma20 else "—")
     c4.metric("MA60", f"{ma60:.2f}" if ma60 else "—")
     c5.metric("本益比", f"{pe:.2f}" if pe else "—")
     c6.metric("ROE", f"{fund.get('roe_pct') or '—'}%")
-    c7.metric("殖利率", f"{yields[0]['dividend_yield_pct']:.2f}%" if yields else "—")
-    c8.metric("短線", latest.get("signal_short") or "—")
+    c7.metric("近四季EPS", f"{ttm_eps:.2f}" if ttm_eps is not None else "—")
+    c8.metric(
+        "預計殖利率",
+        f"{expected_yield:.2f}%" if expected_yield is not None else "—",
+        help=(
+            f"近四季 EPS 加總 × 去年配息率 {payout_ref:.1f}% ÷ 收盤價"
+            if expected_yield is not None and payout_ref
+            else "需有近四季 EPS 與歷史配息率"
+        ),
+    )
+    c9.metric("殖利率", f"{yields[0]['dividend_yield_pct']:.2f}%" if yields else "—", help="近12月實際股利 ÷ 收盤價")
+    c10.metric("短線", latest.get("signal_short") or "—")
+
+    if ttm_eps is not None and ttm.get("periods"):
+        suffix = "" if ttm.get("complete") else "（不足四季，加總現有季度）"
+        st.caption(f"近四季 EPS = {ttm['periods']}{suffix}")
 
     st.plotly_chart(
         price_chart(prices, fair_eps=fair_eps, fair_52w=fair_52w, fair_label=pe_label),
@@ -411,7 +437,6 @@ def render_stock_detail(ticker: str, meta: dict):
         key=f"price_chart_{key_tag}",
     )
 
-    fy_rows = build_five_year_rows(eps_rows, dividends)
     if fy_rows:
         st.markdown("#### 近五年 EPS × 現金股利")
         st.caption(summary_caption(fy_rows))
@@ -434,6 +459,17 @@ def render_stock_detail(ticker: str, meta: dict):
         st.dataframe(summary_df, hide_index=True, use_container_width=True, key=f"eps_div_summary_{key_tag}")
 
     with st.expander("原始股利 / EPS 資料"):
+        if ttm_eps is not None:
+            st.markdown(
+                f"**近四季 EPS 加總：{ttm_eps:.2f}**"
+                + (f"（{ttm['periods']}）" if ttm.get("periods") else "")
+            )
+            if expected_yield is not None and payout_ref is not None:
+                expected_div = ttm_eps * payout_ref / 100
+                st.caption(
+                    f"預計殖利率 = 近四季EPS {ttm_eps:.2f} × 配息率 {payout_ref:.1f}%"
+                    f" = 預計股利 {expected_div:.2f} ÷ 收盤 {close:.2f}"
+                )
         raw_l, raw_r = st.columns(2)
         with raw_l:
             st.markdown("**現金股利**")
@@ -448,11 +484,15 @@ def render_stock_detail(ticker: str, meta: dict):
         with raw_r:
             st.markdown("**季度 EPS**")
             if eps_rows:
-                st.dataframe(
-                    pd.DataFrame(eps_rows)[["fiscal_period", "period_end", "eps"]],
-                    hide_index=True,
-                    key=f"eps_{key_tag}",
-                )
+                eps_df = pd.DataFrame(eps_rows)[["fiscal_period", "period_end", "eps"]]
+                st.dataframe(eps_df, hide_index=True, key=f"eps_{key_tag}")
+                if ttm.get("quarters"):
+                    st.markdown("**近四季明細**")
+                    st.dataframe(
+                        pd.DataFrame(ttm["quarters"])[["fiscal_period", "period_end", "eps"]],
+                        hide_index=True,
+                        key=f"eps_ttm_{key_tag}",
+                    )
             else:
                 st.caption("尚無 EPS 資料")
 
