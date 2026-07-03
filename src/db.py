@@ -20,7 +20,24 @@ def get_client() -> Client:
 def upsert_rows(client: Client, table: str, rows: list[dict[str, Any]], on_conflict: str) -> None:
     if not rows:
         return
-    client.table(table).upsert(rows, on_conflict=on_conflict).execute()
+    clean = [_sanitize_row(r) for r in rows]
+    client.table(table).upsert(clean, on_conflict=on_conflict).execute()
+
+
+def _sanitize_row(row: dict[str, Any]) -> dict[str, Any]:
+    import math
+
+    out: dict[str, Any] = {}
+    for k, v in row.items():
+        if v is None:
+            out[k] = None
+        elif isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+            out[k] = None
+        elif isinstance(v, str) and v == "nan":
+            out[k] = None
+        else:
+            out[k] = v
+    return out
 
 
 def log_sync(
@@ -61,6 +78,26 @@ def fetch_prices(client: Client, ticker: str, limit: int = 365) -> list[dict]:
         .data
         or []
     )
+
+
+def fetch_latest_price_row(client: Client, ticker: str) -> dict | None:
+    rows = fetch_prices(client, ticker, limit=1)
+    return rows[0] if rows else None
+
+
+def fetch_max_trade_date(client: Client, ticker: str) -> date | None:
+    rows = (
+        client.table("daily_prices")
+        .select("trade_date")
+        .eq("ticker", ticker)
+        .order("trade_date", desc=True)
+        .limit(1)
+        .execute()
+        .data
+    )
+    if not rows:
+        return None
+    return date.fromisoformat(rows[0]["trade_date"])
 
 
 def fetch_yields(client: Client, ticker: str, limit: int = 365) -> list[dict]:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply SQL migration to Supabase (one-time setup). Requires SUPABASE_DB_PASSWORD."""
+"""Apply all SQL migrations in supabase/migrations/. Requires SUPABASE_DB_PASSWORD."""
 
 import os
 import sys
@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 ROOT = Path(__file__).resolve().parent.parent
-MIGRATION = ROOT / "supabase" / "migrations" / "001_initial_schema.sql"
+MIGRATIONS_DIR = ROOT / "supabase" / "migrations"
 
 
 def main() -> None:
@@ -26,17 +26,29 @@ def main() -> None:
         print("Install psycopg2-binary: pip install psycopg2-binary")
         sys.exit(1)
 
-    sql = MIGRATION.read_text(encoding="utf-8")
+    files = sorted(MIGRATIONS_DIR.glob("*.sql"))
+    if not files:
+        print("No migration files found.")
+        sys.exit(1)
+
     conn_str = (
         f"host=db.{project_ref}.supabase.co port=5432 dbname=postgres "
         f"user=postgres password={password} sslmode=require"
     )
-    print(f"Applying migration from {MIGRATION.name} ...")
     with psycopg2.connect(conn_str) as conn:
         with conn.cursor() as cur:
-            cur.execute(sql)
+            for path in files:
+                print(f"Applying {path.name} ...")
+                try:
+                    cur.execute(path.read_text(encoding="utf-8"))
+                except psycopg2.Error as exc:
+                    if exc.pgcode == "42710":  # duplicate_object (policy etc.)
+                        print(f"  Skipped (already applied): {exc.pgerror.strip()}")
+                        conn.rollback()
+                        continue
+                    raise
         conn.commit()
-    print("Migration applied successfully.")
+    print(f"Applied {len(files)} migration(s) successfully.")
 
 
 if __name__ == "__main__":

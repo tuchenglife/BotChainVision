@@ -1,0 +1,5 @@
+-- Add MA5, MA60 and crossover signal columns
+ALTER TABLE daily_prices ADD COLUMN IF NOT EXISTS ma5 DOUBLE PRECISION;
+ALTER TABLE daily_prices ADD COLUMN IF NOT EXISTS ma60 DOUBLE PRECISION;
+ALTER TABLE daily_prices ADD COLUMN IF NOT EXISTS signal_short TEXT;
+ALTER TABLE daily_prices ADD COLUMN IF NOT EXISTS signal_medium TEXT;

@@ -9,7 +9,7 @@ on:
       backfill_days:
         description: "Days of price history to fetch"
         required: false
-        default: "90"
+        default: "120"
 
 jobs:
   sync:

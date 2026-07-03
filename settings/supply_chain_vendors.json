@@ -2,13 +2,13 @@
   "vendors": [
     { "category_id": "drivetrain", "company": "上銀", "ticker": "2049", "market": "TW", "watch": true },
     { "category_id": "drivetrain", "company": "全球傳動", "ticker": "4540", "market": "TW", "watch": true },
-    { "category_id": "drivetrain", "company": "直得", "ticker": "1597", "market": "TWO", "watch": true },
-    { "category_id": "drivetrain", "company": "大銀微系統", "ticker": "4576", "market": "TWO", "watch": true },
-    { "category_id": "drivetrain", "company": "鈞興-KY", "ticker": "4571", "market": "TWO", "watch": true },
+    { "category_id": "drivetrain", "company": "直得", "ticker": "1597", "market": "TW", "watch": true },
+    { "category_id": "drivetrain", "company": "大銀微系統", "ticker": "4576", "market": "TW", "watch": true },
+    { "category_id": "drivetrain", "company": "鈞興-KY", "ticker": "4571", "market": "TW", "watch": true },
     { "category_id": "motor", "company": "台達電", "ticker": "2308", "market": "TW", "watch": true },
     { "category_id": "motor", "company": "東元", "ticker": "1504", "market": "TW", "watch": true },
-    { "category_id": "motor", "company": "大銀微系統", "ticker": "4576", "market": "TWO", "watch": true },
-    { "category_id": "motor", "company": "和大", "ticker": "1536", "market": "TWO", "watch": true },
+    { "category_id": "motor", "company": "大銀微系統", "ticker": "4576", "market": "TW", "watch": true },
+    { "category_id": "motor", "company": "和大", "ticker": "1536", "market": "TW", "watch": true },
     { "category_id": "pcb", "company": "台達電", "ticker": "2308", "market": "TW", "watch": true },
     { "category_id": "pcb", "company": "鴻海", "ticker": "2317", "market": "TW", "watch": true },
     { "category_id": "pcb", "company": "緯穎", "ticker": "6669", "market": "TW", "watch": true },
@@ -16,11 +16,11 @@
     { "category_id": "vision", "company": "所羅門", "ticker": "2359", "market": "TW", "watch": true },
     { "category_id": "vision", "company": "亞光", "ticker": "3019", "market": "TW", "watch": true },
     { "category_id": "vision", "company": "先進光", "ticker": "3362", "market": "TWO", "watch": true },
-    { "category_id": "vision", "company": "中光電", "ticker": "5371", "market": "TW", "watch": true },
+    { "category_id": "vision", "company": "中光電", "ticker": "5371", "market": "TWO", "watch": true },
     { "category_id": "vision", "company": "佳能", "ticker": "2374", "market": "TW", "watch": true },
     { "category_id": "structure", "company": "鴻準", "ticker": "2354", "market": "TW", "watch": true },
     { "category_id": "structure", "company": "盟立", "ticker": "2474", "market": "TW", "watch": true },
-    { "category_id": "structure", "company": "和椿", "ticker": "6215", "market": "TWO", "watch": true },
+    { "category_id": "structure", "company": "和椿", "ticker": "6215", "market": "TW", "watch": true },
     { "category_id": "structure", "company": "高鋒", "ticker": "4510", "market": "TWO", "watch": true }
   ]
 }

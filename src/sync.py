@@ -6,8 +6,22 @@ from typing import Any
 import pandas as pd
 import yfinance as yf
 
-from src.config import load_categories, load_vendors, unique_watch_tickers
-from src.db import get_client, log_sync, upsert_rows
+from src.config import load_categories, load_vendors
+from src.db import fetch_max_trade_date, get_client, log_sync, upsert_rows
+from src.fundamentals import fetch_pe_metrics
+from src.indicators import enrich_price_dataframe
+from src.symbol_resolver import resolve_yfinance_symbol, unique_resolved_tickers
+
+# Long-term accumulation: initial backfill 2y; daily incremental keeps older rows in DB.
+INITIAL_BACKFILL_DAYS = 730
+MA_BUFFER_DAYS = 90
+DAILY_MIN_FETCH_DAYS = 120
+
+
+def _str_or_none(val: Any) -> str | None:
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    return str(val) if val != "nan" else None
 
 
 def _normalize_index(df: pd.DataFrame) -> pd.DataFrame:
@@ -21,8 +35,23 @@ def _normalize_index(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def fetch_history(ticker: str, days: int = 90) -> pd.DataFrame:
-    df = yf.Ticker(ticker).history(period=f"{days}d", auto_adjust=True)
+    """Fetch OHLCV; uses start date for windows longer than 730 days."""
+    t = yf.Ticker(ticker)
+    if days > 730:
+        start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        df = t.history(start=start, auto_adjust=True)
+    else:
+        df = t.history(period=f"{days}d", auto_adjust=True)
     return _normalize_index(df)
+
+
+def _resolve_fetch_days(client, ticker: str, backfill_days: int) -> int:
+    """Smart fetch window: accumulate history without re-downloading everything daily."""
+    max_date = fetch_max_trade_date(client, ticker)
+    if max_date is None:
+        return max(backfill_days, INITIAL_BACKFILL_DAYS)
+    days_since = (date.today() - max_date).days
+    return max(DAILY_MIN_FETCH_DAYS, days_since + MA_BUFFER_DAYS, backfill_days)
 
 
 def sync_supply_chain_settings(client) -> None:
@@ -55,21 +84,34 @@ def sync_daily_prices(
     tickers: list[str] | None = None,
     source: str = "scheduled",
     backfill_days: int = 90,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     if tickers is None:
-        tickers = unique_watch_tickers()
+        tickers = unique_resolved_tickers()
     rows: list[dict[str, Any]] = []
     errors: list[str] = []
 
     for ticker in tickers:
         try:
-            df = fetch_history(ticker, days=backfill_days)
+            fetch_days = _resolve_fetch_days(client, ticker, backfill_days)
+            df = fetch_history(ticker, days=fetch_days)
             if df.empty:
                 errors.append(f"{ticker}: no data")
                 continue
-            df["ma20"] = df["Close"].rolling(window=20).mean()
+
+            df = enrich_price_dataframe(df.sort_index())
+            latest_close = float(df["Close"].iloc[-1])
+            metrics = fetch_pe_metrics(ticker, close_price=latest_close)
+            eps_ttm = metrics.get("eps_ttm")
+
             for ts, row in df.iterrows():
                 trade_date = ts.date() if hasattr(ts, "date") else ts
+                close_price = float(row["Close"])
+                pe_ratio = None
+                if eps_ttm and eps_ttm > 0:
+                    pe_ratio = round(close_price / eps_ttm, 2)
+                elif ts == df.index[-1]:
+                    pe_ratio = metrics.get("pe_ratio")
+
                 rows.append(
                     {
                         "ticker": ticker,
@@ -77,22 +119,30 @@ def sync_daily_prices(
                         "open_price": float(row["Open"]) if pd.notna(row["Open"]) else None,
                         "high_price": float(row["High"]),
                         "low_price": float(row["Low"]),
-                        "close_price": float(row["Close"]),
+                        "close_price": close_price,
                         "volume": int(row["Volume"]) if pd.notna(row["Volume"]) else None,
+                        "ma5": float(row["ma5"]) if pd.notna(row.get("ma5")) else None,
                         "ma20": float(row["ma20"]) if pd.notna(row.get("ma20")) else None,
+                        "ma60": float(row["ma60"]) if pd.notna(row.get("ma60")) else None,
+                        "signal_short": _str_or_none(row.get("signal_short")),
+                        "signal_medium": _str_or_none(row.get("signal_medium")),
+                        "pe_ratio": pe_ratio,
+                        "eps_ttm": eps_ttm,
                         "source": source,
                     }
                 )
         except Exception as exc:  # noqa: BLE001
             errors.append(f"{ticker}: {exc}")
 
-    upsert_rows(client, "daily_prices", rows, on_conflict="ticker,trade_date")
+    chunk_size = 500
+    for i in range(0, len(rows), chunk_size):
+        upsert_rows(client, "daily_prices", rows[i : i + chunk_size], on_conflict="ticker,trade_date")
     return {"rows": len(rows), "errors": errors}
 
 
 def sync_dividends(client, tickers: list[str] | None = None) -> list[dict[str, Any]]:
     if tickers is None:
-        tickers = unique_watch_tickers()
+        tickers = unique_resolved_tickers()
     rows: list[dict[str, Any]] = []
 
     for ticker in tickers:
@@ -140,7 +190,7 @@ def sync_dividend_yields(
     source: str = "scheduled",
 ) -> list[dict[str, Any]]:
     if tickers is None:
-        tickers = unique_watch_tickers()
+        tickers = unique_resolved_tickers()
     rows: list[dict[str, Any]] = []
 
     for ticker in tickers:
@@ -176,7 +226,7 @@ def sync_dividend_yields(
 
 def sync_historical_eps(client, tickers: list[str] | None = None) -> list[dict[str, Any]]:
     if tickers is None:
-        tickers = unique_watch_tickers()
+        tickers = unique_resolved_tickers()
     rows: list[dict[str, Any]] = []
 
     for ticker in tickers:
@@ -209,12 +259,12 @@ def sync_historical_eps(client, tickers: list[str] | None = None) -> list[dict[s
 
 def run_full_sync(source: str = "scheduled", backfill_days: int = 90) -> dict[str, Any]:
     client = get_client()
-    tickers = unique_watch_tickers()
+    tickers = unique_resolved_tickers()
     try:
         sync_supply_chain_settings(client)
         price_result = sync_daily_prices(client, tickers, source=source, backfill_days=backfill_days)
         sync_dividends(client, tickers)
-        yields = sync_dividend_yields(client, tickers, source=source)
+        sync_dividend_yields(client, tickers, source=source)
         sync_historical_eps(client, tickers)
         err_msg = "; ".join(price_result.get("errors", []))
         status = "ok" if price_result.get("rows", 0) > 0 else "error"

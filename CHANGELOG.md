@@ -9,7 +9,29 @@
 
 ### 待發布
 - 新聞 RSS 聚合與預估 EPS/營收抽取
-- Streamlit Cloud 正式網址確認後更新 USER_GUIDE
+
+---
+
+## [0.2.0] - 2026-07-03
+
+### Added
+- `src/symbol_resolver.py` — 自動嘗試 `.TW` / `.TWO` 解析 yfinance 代號
+- `src/fundamentals.py` — 本益比（trailingPE / 股價÷EPS）
+- `daily_prices.pe_ratio`、`eps_ttm` 欄位（migration 003）
+- 總覽：公司名稱、前一天收盤、短線/中線狀態、本益比、漲跌配色
+- 個股：中文公司名、類別、MA5/MA20/MA60、本益比
+- 「元件分布」分頁
+- 「關於」均線狀態說明
+
+### Fixed
+- 1597 等上櫃股：改用正確 yfinance 後綴（多數為 `.TW`）
+- 5371 中光電：改為 `5371.TWO`
+- Cache 對話框：移除 `st.cache_data.clear()`
+- NaN 值寫入 Supabase JSON 錯誤
+
+### Changed
+- 首次同步回補 730 天；每日增量累積保留歷史
+- 同步成功 **20 檔標的、14580 筆**股價（零錯誤）
 
 ---
 

@@ -1,0 +1,3 @@
+-- P/E ratio and trailing EPS
+ALTER TABLE daily_prices ADD COLUMN IF NOT EXISTS pe_ratio DOUBLE PRECISION;
+ALTER TABLE daily_prices ADD COLUMN IF NOT EXISTS eps_ttm DOUBLE PRECISION;
