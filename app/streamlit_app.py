@@ -11,8 +11,18 @@ import streamlit.components.v1 as components
 from supabase import Client, create_client  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent.parent
+APP_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(APP_DIR))
 sys.path.insert(0, str(ROOT))
 ASSETS = ROOT / "assets"
+
+from eps_chart import (
+    build_five_year_rows,
+    expected_dividend_yield_pct,
+    last_payout_ratio,
+    summary_caption,
+    trailing_four_quarters_eps,
+)
 
 from src.category_pe import fair_pe_label, reference_pe_for_category, reference_pe_map
 from src.config import SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL, load_categories
@@ -29,16 +39,11 @@ from src.symbol_resolver import unique_resolved_tickers
 from src.sync import run_full_sync
 from src.valuation import (
     assessment_style,
-    build_five_year_rows,
-    expected_dividend_yield_pct,
     fair_value_52w_mid,
     fair_value_by_eps,
-    last_payout_ratio,
     ma_position_label,
     pct_vs,
     price_assessment,
-    summary_caption,
-    trailing_four_quarters_eps,
 )
 from src.vendor_meta import build_ticker_meta, categories_for, company_for
 from src.ux_helpers import (
