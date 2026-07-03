@@ -160,14 +160,20 @@ SUPABASE_SERVICE_ROLE_KEY = "你的_service_role_key"
 
 ---
 
-## 六、GitHub Secrets（已設定則跳過）
+## 六、GitHub Secrets（一次性設定）
 
-Repo → **Settings → Secrets and variables → Actions**：
+> ⚠️ Actions 排程需要此步驟。若 workflow 失敗，請先完成設定。
 
-| Secret | 值 |
-|--------|-----|
-| `SUPABASE_URL` | `https://verzhajfabdmnkmedjfo.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase API → service_role |
+詳見 [GITHUB_SECRETS_SETUP.md](GITHUB_SECRETS_SETUP.md)
+
+**快速方式（本機終端機）：**
+
+```powershell
+cd D:\Tina\Projects\Cursor\BotChainVision
+powershell -ExecutionPolicy Bypass -File scripts/setup_github_secrets.ps1
+```
+
+或至 https://github.com/tuchenglife/BotChainVision/settings/secrets/actions 手動新增 `SUPABASE_URL` 與 `SUPABASE_SERVICE_ROLE_KEY`。
 
 ---
 

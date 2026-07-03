@@ -124,3 +124,5 @@
 - [待辦事項](TODO.md)
 - [變更紀錄](CHANGELOG.md)
 - [README](README.md)
+- [GitHub Secrets 設定](docs/GITHUB_SECRETS_SETUP.md)
+- [Streamlit Cloud 部署](docs/DEPLOY_STREAMLIT.md)

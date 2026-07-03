@@ -59,9 +59,18 @@
 
 ### Infrastructure
 - Supabase 專案：`verzhajfabdmnkmedjfo`（botchain-vision）
-- GitHub repo：`tuchenglife/BotChainVision`
-- 本機 Dashboard：http://localhost:8501
-- 雲端 Dashboard（待部署）：https://botchainvision.streamlit.app
+- GitHub repo：https://github.com/tuchenglife/BotChainVision
+- GitHub Actions：https://github.com/tuchenglife/BotChainVision/actions
+- 本機 Dashboard：http://localhost:8501（已驗證可啟動）
+- 雲端 Dashboard（待部署）：https://botchainvision.streamlit.app — 見 [docs/DEPLOY_STREAMLIT.md](docs/DEPLOY_STREAMLIT.md)
+
+### Documentation
+- `requirement.md` — 需求規格
+- `docs/USER_GUIDE.md` — 使用者指南（登入網址）
+- `TODO.md` — 待辦追蹤
+- `CHANGELOG.md` — 變更紀錄
+- `docs/GITHUB_SECRETS_SETUP.md` — GitHub Secrets 設定
+- `scripts/setup_github_secrets.ps1` — 本機一鍵設定 Secrets
 
 ---
 
