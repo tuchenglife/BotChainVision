@@ -3,27 +3,32 @@
     {
       "id": "drivetrain",
       "name": "精密傳動 (CNC/培林/螺桿)",
-      "component_examples": "交叉滾柱軸承、關節外殼、小腿結構"
+      "component_examples": "交叉滾柱軸承、關節外殼、小腿結構",
+      "reference_pe": 21
     },
     {
       "id": "motor",
       "name": "馬達與驅動系統 (電機)",
-      "component_examples": "無框伺服馬達、電磁煞車"
+      "component_examples": "無框伺服馬達、電磁煞車",
+      "reference_pe": 21
     },
     {
       "id": "pcb",
       "name": "PCB 電子控制 (電子)",
-      "component_examples": "任務電腦/主控制器、感測器PCB"
+      "component_examples": "任務電腦/主控制器、感測器PCB",
+      "reference_pe": 18
     },
     {
       "id": "vision",
       "name": "AI 視覺/感測 (光學/電子)",
-      "component_examples": "LiDAR、深度相機、RGB 相機"
+      "component_examples": "LiDAR、深度相機、RGB 相機",
+      "reference_pe": 25
     },
     {
       "id": "structure",
       "name": "機構件與組裝 (CNC/壓鑄)",
-      "component_examples": "關節外殼、機身骨架"
+      "component_examples": "關節外殼、機身骨架",
+      "reference_pe": 16
     }
   ]
 }

@@ -18,9 +18,16 @@ def build_ticker_meta() -> dict[str, dict]:
         )
         cat_label = cat_names.get(v["category_id"], v["category_id"])
         if sym not in meta:
-            meta[sym] = {"company": v["company"], "ticker_code": v["ticker"], "categories": []}
+            meta[sym] = {
+                "company": v["company"],
+                "ticker_code": v["ticker"],
+                "categories": [],
+                "category_ids": [],
+            }
         if cat_label not in meta[sym]["categories"]:
             meta[sym]["categories"].append(cat_label)
+        if v["category_id"] not in meta[sym]["category_ids"]:
+            meta[sym]["category_ids"].append(v["category_id"])
 
     for entry in meta.values():
         entry["category_text"] = "、".join(entry["categories"])

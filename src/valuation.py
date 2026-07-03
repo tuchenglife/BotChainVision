@@ -46,6 +46,7 @@ def price_assessment(
     vs_ma60: float | None,
     fair_eps: float | None,
     roe: float | None,
+    reference_pe: float = 18.0,
 ) -> str:
     """Heuristic tag: 偏低 / 合理 / 偏高 (not investment advice)."""
     if close is None:
@@ -64,9 +65,11 @@ def price_assessment(
     elif vs_ma60 is not None and vs_ma60 > 8:
         score += 1
     if pe is not None:
-        if pe < 12:
+        low_pe = reference_pe * 0.75
+        high_pe = reference_pe * 1.25
+        if pe < low_pe:
             score -= 1
-        elif pe > 25:
+        elif pe > high_pe:
             score += 1
     if roe is not None and roe > 0.15 and score <= 0:
         score -= 1

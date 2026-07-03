@@ -26,6 +26,11 @@ def tickers_in_category(category_id: str | None, meta: dict) -> list[str]:
     return sorted(result)
 
 
+def primary_category_id(sym: str, meta: dict) -> str | None:
+    ids = meta.get(sym, {}).get("category_ids", [])
+    return ids[0] if ids else None
+
+
 def primary_category(sym: str, meta: dict) -> str:
     cats = meta.get(sym, {}).get("categories", [])
     if not cats:

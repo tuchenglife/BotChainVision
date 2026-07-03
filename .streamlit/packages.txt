@@ -1,0 +1,1 @@
+# Streamlit Cloud entry hint — main file: app/streamlit_app.py
