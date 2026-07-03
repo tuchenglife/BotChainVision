@@ -351,6 +351,10 @@ def render_stock_detail(ticker: str, meta: dict):
     ref_pe = reference_pe_for_category(cat_id)
     pe_label = fair_pe_label(cat_id)
     key_tag = ticker
+    ticker_code = meta.get(ticker, {}).get("ticker_code", "")
+
+    if ticker_code:
+        st.markdown(f"[🔗 Winvest 個股討論](https://winvest.tw/Stock/Symbol/Comment/{ticker_code})")
 
     st.subheader(company)
     st.caption(f"`{meta.get(ticker, {}).get('ticker_code', '')}` · {ticker} · 📂 {cat_short} · 參考PE **{ref_pe:g}**")
