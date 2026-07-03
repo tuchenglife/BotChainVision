@@ -1,7 +1,7 @@
 # BotChainVision 需求規格 (Requirements)
 
 > 專案：人形機器人關鍵零組件與台股供應鏈追蹤 Dashboard  
-> 最後更新：2026-07-03
+> 最後更新：2026-07-04
 
 ---
 
@@ -30,6 +30,9 @@
 | F-13 | TW/TWO 代號自動解析 | ✅ 完成 |
 | F-14 | 供應鏈總覽點選公司列跳轉個股深度 | ✅ 完成 |
 | F-15 | 依供應鏈環節參考本益比計算合理價 | ✅ 完成 |
+| F-16 | 個股深度：近四季 EPS、預計殖利率、年度 EPS 補強與資料不足提示 | ✅ 完成 |
+| F-17 | 我的投資帳戶：券商匯入格式規格（富邦/永豐/新光；已實現/未實現/股利） | ✅ 規格完成 |
+| F-18 | 我的投資帳戶：帳戶分頁、CSV/Excel 匯入、月度/年度損益報表 | ⏳ 待辦 |
 | F-09 | 新聞聚合與預估 EPS/營收抽取 | ⏳ 待辦 |
 | F-10 | 新聞牆 UI | ⏳ 待辦 |
 
@@ -41,6 +44,7 @@
 | D-02 | Google News RSS / 爬蟲 | 新聞、預估 EPS/營收 | ⏳ 待辦 |
 | D-03 | settings JSON | 供應鏈廠商清單（可擴充） | ✅ 完成 |
 | D-04 | MOPS 公開資訊 | 台股公告查核 | ⏳ 待辦 |
+| D-05 | 券商匯出檔（富邦/永豐/新光） | 已實現損益、未實現損益、庫存、股利 | ✅ 規格完成 |
 
 ### 2.3 資料儲存
 
@@ -52,6 +56,7 @@
 | S-04 | 歷史股利、歷史 EPS | ✅ 完成 |
 | S-05 | 預估 EPS/營收（多來源） | ⏳ 待辦 |
 | S-06 | 同步紀錄 log | ✅ 完成 |
+| S-07 | 投資帳戶資料表（庫存、已實現損益、股利所得） | ⏳ 待辦 |
 
 ### 2.4 排程與部署
 
@@ -99,6 +104,15 @@
 ### estimates（待實作）
 新聞或 yfinance 預估 EPS、營收
 
+### portfolio_holdings（待實作）
+券商庫存快照與未實現損益，只顯示券商名稱，不顯示帳號。
+
+### portfolio_realized_trades（待實作）
+券商已實現損益，作為資本利得來源。
+
+### portfolio_dividends（待實作）
+券商股利所得紀錄，與資本利得分開統計。
+
 ### supply_chain_vendors
 供應鏈廠商主檔（由 settings 同步）
 
@@ -118,9 +132,10 @@
 ## 6. 已知限制
 
 1. ~~部分上櫃小票 yfinance 無資料~~ → 已用 symbol_resolver 修復
-2. 台股 EPS 覆蓋率因標的而異
+2. 台股 EPS 覆蓋率因標的而異；yfinance 季度 EPS 常只提供近 3 季，年度 EPS 可補近五年圖表
 3. Streamlit Cloud 需使用者自行連結 GitHub 完成首次部署
 4. Supabase Free 專案 7 天無活動可能 pause（每日 Actions 寫入可避免）
+5. 投資帳戶匯入目前為規格階段，尚未建立 parser、資料表與 UI
 
 ---
 
@@ -132,3 +147,4 @@
 - [README](README.md)
 - [GitHub Secrets 設定](docs/GITHUB_SECRETS_SETUP.md)
 - [Streamlit Cloud 部署](docs/DEPLOY_STREAMLIT.md)
+- [投資帳戶匯入格式](docs/PORTFOLIO_IMPORT_FORMAT.md)

@@ -22,6 +22,7 @@ from eps_chart import (
     last_payout_ratio,
     summary_caption,
     trailing_four_quarters_eps,
+    ttm_gap_caption,
 )
 
 from src.category_pe import fair_pe_label, reference_pe_for_category, reference_pe_map
@@ -433,6 +434,9 @@ def render_stock_detail(ticker: str, meta: dict):
     if ttm_eps is not None and ttm.get("periods"):
         suffix = "" if ttm.get("complete") else "（不足四季，加總現有季度）"
         st.caption(f"近四季 EPS = {ttm['periods']}{suffix}")
+        gap = ttm_gap_caption(ttm)
+        if gap:
+            st.caption(gap)
 
     st.plotly_chart(
         price_chart(prices, fair_eps=fair_eps, fair_52w=fair_52w, fair_label=pe_label),
@@ -463,15 +467,20 @@ def render_stock_detail(ticker: str, meta: dict):
 
     with st.expander("原始股利 / EPS 資料"):
         if ttm_eps is not None:
+            suffix = "" if ttm.get("complete") else "（不足四季）"
             st.markdown(
-                f"**近四季 EPS 加總：{ttm_eps:.2f}**"
+                f"**近四季 EPS 加總：{ttm_eps:.2f}{suffix}**"
                 + (f"（{ttm['periods']}）" if ttm.get("periods") else "")
             )
+            gap = ttm_gap_caption(ttm)
+            if gap:
+                st.caption(gap)
             if expected_yield is not None and payout_ref is not None:
                 expected_div = ttm_eps * payout_ref / 100
                 st.caption(
                     f"預計殖利率 = 近四季EPS {ttm_eps:.2f} × 配息率 {payout_ref:.1f}%"
                     f" = 預計股利 {expected_div:.2f} ÷ 收盤 {close:.2f}"
+                    f" = **{expected_yield:.2f}%**"
                 )
         raw_l, raw_r = st.columns(2)
         with raw_l:
@@ -485,16 +494,31 @@ def render_stock_detail(ticker: str, meta: dict):
             else:
                 st.caption("尚無股利資料")
         with raw_r:
-            st.markdown("**季度 EPS**")
-            if eps_rows:
-                eps_df = pd.DataFrame(eps_rows)[["fiscal_period", "period_end", "eps"]]
-                st.dataframe(eps_df, hide_index=True, key=f"eps_{key_tag}")
+            quarterly = [r for r in eps_rows if r.get("period_type", "quarterly") == "quarterly"]
+            annual = [r for r in eps_rows if r.get("period_type") == "annual"]
+            if quarterly or annual:
                 if ttm.get("quarters"):
                     st.markdown("**近四季明細**")
                     st.dataframe(
                         pd.DataFrame(ttm["quarters"])[["fiscal_period", "period_end", "eps"]],
                         hide_index=True,
                         key=f"eps_ttm_{key_tag}",
+                    )
+                if annual:
+                    st.markdown("**年度 EPS**")
+                    st.dataframe(
+                        pd.DataFrame(annual)[["fiscal_period", "period_end", "eps"]],
+                        hide_index=True,
+                        key=f"eps_annual_{key_tag}",
+                    )
+                ttm_fps = {r.get("fiscal_period") for r in (ttm.get("quarters") or [])}
+                extra = [r for r in quarterly if r.get("fiscal_period") not in ttm_fps]
+                if extra:
+                    st.markdown("**其他季度 EPS**")
+                    st.dataframe(
+                        pd.DataFrame(extra)[["fiscal_period", "period_end", "eps"]],
+                        hide_index=True,
+                        key=f"eps_{key_tag}",
                     )
             else:
                 st.caption("尚無 EPS 資料")

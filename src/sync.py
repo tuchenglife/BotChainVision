@@ -242,16 +242,26 @@ def sync_historical_eps(client, tickers: list[str] | None = None) -> list[dict[s
         tickers = unique_resolved_tickers()
     rows: list[dict[str, Any]] = []
 
+    def _eps_at(income: pd.DataFrame, period_end, keys: tuple[str, ...]) -> float | None:
+        for key in keys:
+            if key not in income.index:
+                continue
+            val = income.loc[key].get(period_end)
+            if val is not None and not pd.isna(val):
+                return float(val)
+        return None
+
     for ticker in tickers:
         try:
             import yfinance as yf
 
             t = yf.Ticker(ticker)
             income = t.quarterly_income_stmt
-            if income is not None and not income.empty and "Basic EPS" in income.index:
-                eps_row = income.loc["Basic EPS"]
-                for period_end, eps_val in eps_row.items():
-                    if pd.isna(eps_val):
+            if income is not None and not income.empty:
+                eps_keys = ("Basic EPS", "Diluted EPS")
+                for period_end in income.columns:
+                    eps_val = _eps_at(income, period_end, eps_keys)
+                    if eps_val is None:
                         continue
                     pe = period_end.date() if hasattr(period_end, "date") else period_end
                     fiscal_period = f"{pe.year}Q{(pe.month - 1) // 3 + 1}"
@@ -261,7 +271,25 @@ def sync_historical_eps(client, tickers: list[str] | None = None) -> list[dict[s
                             "period_type": "quarterly",
                             "fiscal_period": fiscal_period,
                             "period_end": pe.isoformat(),
-                            "eps": float(eps_val),
+                            "eps": eps_val,
+                            "source_type": "yfinance",
+                        }
+                    )
+
+            annual = t.income_stmt
+            if annual is not None and not annual.empty:
+                for period_end in annual.columns:
+                    eps_val = _eps_at(annual, period_end, ("Basic EPS", "Diluted EPS"))
+                    if eps_val is None:
+                        continue
+                    pe = period_end.date() if hasattr(period_end, "date") else period_end
+                    rows.append(
+                        {
+                            "ticker": ticker,
+                            "period_type": "annual",
+                            "fiscal_period": str(pe.year),
+                            "period_end": pe.isoformat(),
+                            "eps": eps_val,
                             "source_type": "yfinance",
                         }
                     )

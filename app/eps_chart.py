@@ -15,9 +15,22 @@ def _parse_year(value: str | None) -> int | None:
         return None
 
 
+def _quarterly_rows(eps_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [r for r in eps_rows if r.get("period_type", "quarterly") == "quarterly"]
+
+
 def _annual_eps(eps_rows: list[dict[str, Any]], current_year: int) -> dict[int, dict[str, Any]]:
-    by_year: dict[int, list[tuple[str, float]]] = {}
+    annual_by_year: dict[int, float] = {}
     for row in eps_rows:
+        if row.get("period_type") != "annual":
+            continue
+        year = _parse_year(row.get("fiscal_period")) or _parse_year(row.get("period_end"))
+        if year is None or row.get("eps") is None:
+            continue
+        annual_by_year[year] = float(row["eps"])
+
+    by_year: dict[int, list[tuple[str, float]]] = {}
+    for row in _quarterly_rows(eps_rows):
         pe = row.get("period_end")
         year = _parse_year(pe) if pe else _parse_year(row.get("fiscal_period"))
         if year is None:
@@ -29,17 +42,38 @@ def _annual_eps(eps_rows: list[dict[str, Any]], current_year: int) -> dict[int, 
         by_year.setdefault(year, []).append((fp, float(eps_val)))
 
     result: dict[int, dict[str, Any]] = {}
-    for year, quarters in by_year.items():
-        total = sum(v for _, v in quarters)
-        is_ytd = year == current_year
-        through = max((fp for fp, _ in quarters if fp), default="")
-        label = f"{total:.2f}累計" if is_ytd else f"{total:.2f}"
-        result[year] = {
-            "eps": round(total, 4),
-            "eps_label": label,
-            "is_ytd": is_ytd,
-            "through_quarter": through if is_ytd else None,
-        }
+    years = set(annual_by_year) | set(by_year) | {current_year}
+    for year in sorted(years):
+        if year == current_year and year in by_year:
+            quarters = by_year[year]
+            total = sum(v for _, v in quarters)
+            through = max((fp for fp, _ in quarters if fp), default="")
+            result[year] = {
+                "eps": round(total, 4),
+                "eps_label": f"{total:.2f}累計",
+                "is_ytd": True,
+                "through_quarter": through or None,
+            }
+        elif year < current_year and year in annual_by_year:
+            eps = annual_by_year[year]
+            result[year] = {
+                "eps": round(eps, 4),
+                "eps_label": f"{eps:.2f}",
+                "is_ytd": False,
+                "through_quarter": None,
+            }
+        elif year in by_year:
+            quarters = by_year[year]
+            total = sum(v for _, v in quarters)
+            through = max((fp for fp, _ in quarters if fp), default="")
+            is_ytd = year == current_year
+            label = f"{total:.2f}累計" if is_ytd else f"{total:.2f}"
+            result[year] = {
+                "eps": round(total, 4),
+                "eps_label": label,
+                "is_ytd": is_ytd,
+                "through_quarter": through if is_ytd else None,
+            }
     return result
 
 
@@ -100,11 +134,12 @@ def summary_caption(rows: list[dict[str, Any]]) -> str:
 
 
 def trailing_four_quarters_eps(eps_rows: list[dict[str, Any]]) -> dict[str, Any]:
-    if not eps_rows:
+    quarterly = _quarterly_rows(eps_rows)
+    if not quarterly:
         return {"ttm_eps": None, "quarters": [], "periods": "", "complete": False}
 
     unique: dict[str, dict[str, Any]] = {}
-    for row in eps_rows:
+    for row in quarterly:
         fp = row.get("fiscal_period") or row.get("period_end") or ""
         if fp and fp not in unique:
             unique[fp] = row
@@ -120,6 +155,18 @@ def trailing_four_quarters_eps(eps_rows: list[dict[str, Any]]) -> dict[str, Any]
         "periods": periods,
         "complete": len(last4) == 4,
     }
+
+
+def ttm_gap_caption(ttm: dict[str, Any]) -> str | None:
+    if ttm.get("complete"):
+        return None
+    n = len(ttm.get("quarters") or [])
+    missing = 4 - n
+    return (
+        f"目前僅 {n} 季可加總（尚缺 {missing} 季）。"
+        "yfinance 季度 EPS 常缺最新季或 Q4 空值，2026 季度可能尚未更新；"
+        "五年圖表之歷年 EPS 來自年度財報。"
+    )
 
 
 def last_payout_ratio(fy_rows: list[dict[str, Any]]) -> float | None:
