@@ -1,0 +1,32 @@
+name: Daily Market Sync
+
+on:
+  schedule:
+    # UTC 10:00 = Taiwan 18:00 (weekdays)
+    - cron: "0 10 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      backfill_days:
+        description: "Days of price history to fetch"
+        required: false
+        default: "90"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run daily sync
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python scripts/daily_sync.py --source scheduled --backfill-days ${{ github.event.inputs.backfill_days || '90' }}
