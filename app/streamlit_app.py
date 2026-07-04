@@ -712,6 +712,14 @@ def _fmt_num(value, digits: int = 0) -> str:
     return f"{float(value):,.{digits}f}"
 
 
+def _format_amount_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    display_df = df.copy()
+    for col in columns:
+        if col in display_df.columns:
+            display_df[col] = display_df[col].apply(lambda v: _fmt_num(v))
+    return display_df
+
+
 def render_portfolio_area():
     st.subheader("💼 我的投資專區")
     st.caption("資料來自已匯入的券商報表；畫面只顯示券商名稱，不顯示帳號。")
@@ -779,7 +787,12 @@ def render_portfolio_area():
                 "return_pct": "報酬率%",
             }
         )
-        st.dataframe(hdf_view, hide_index=True, use_container_width=True, key="portfolio_holdings")
+        st.dataframe(
+            _format_amount_columns(hdf_view, ["股數", "市值", "成本", "未實現損益"]),
+            hide_index=True,
+            use_container_width=True,
+            key="portfolio_holdings",
+        )
 
         by_broker = (
             hdf.groupby("broker", as_index=False)
@@ -793,8 +806,29 @@ def render_portfolio_area():
                 }
             )
         )
+        by_broker = pd.concat(
+            [
+                by_broker,
+                pd.DataFrame(
+                    [
+                        {
+                            "券商": "合計",
+                            "市值": by_broker["市值"].sum(),
+                            "成本": by_broker["成本"].sum(),
+                            "未實現損益": by_broker["未實現損益"].sum(),
+                        }
+                    ]
+                ),
+            ],
+            ignore_index=True,
+        )
         st.markdown("#### 券商庫存彙總")
-        st.dataframe(by_broker, hide_index=True, use_container_width=True, key="portfolio_broker_summary")
+        st.dataframe(
+            _format_amount_columns(by_broker, ["市值", "成本", "未實現損益"]),
+            hide_index=True,
+            use_container_width=True,
+            key="portfolio_broker_summary",
+        )
 
     if realized:
         st.markdown("#### 已實現損益（資本利得）")
@@ -846,7 +880,12 @@ def render_portfolio_area():
                 "return_pct": "報酬率%",
             }
         )
-        st.dataframe(rdf_view, hide_index=True, use_container_width=True, key="portfolio_realized")
+        st.dataframe(
+            _format_amount_columns(rdf_view, ["股數", "買入成本", "賣出所得", "已實現損益"]),
+            hide_index=True,
+            use_container_width=True,
+            key="portfolio_realized",
+        )
 
     if dividends:
         st.markdown("#### 股利所得")
