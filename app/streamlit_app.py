@@ -26,10 +26,13 @@ from eps_chart import (
 )
 
 from src.category_pe import fair_pe_label, reference_pe_for_category, reference_pe_map
-from src.config import SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL, load_categories
+from src.config import SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL, load_categories, load_vendors
 from src.db import (
     fetch_dividends,
     fetch_eps,
+    fetch_portfolio_dividends,
+    fetch_portfolio_holdings,
+    fetch_portfolio_realized_trades,
     fetch_prices,
     fetch_yields,
     get_client,
@@ -605,9 +608,251 @@ def price_chart(
 
 def render_component_map():
     st.subheader("人形機器人元件分布")
+    st.caption("依目前觀察清單自動統計各供應鏈環節，幫助快速看出標的集中在哪些元件。")
+
+    categories = load_categories()
+    vendors = load_vendors()
+    if not categories or not vendors:
+        st.info("尚未設定供應鏈分類或觀察標的。")
+        return
+
+    cat_rows = []
+    detail_rows = []
+    for cat in categories:
+        cat_id = cat["id"]
+        cat_vendors = [v for v in vendors if v.get("category_id") == cat_id]
+        unique_companies = sorted({v["company"] for v in cat_vendors})
+        cat_rows.append(
+            {
+                "供應鏈環節": category_short_name(cat["name"]),
+                "觀察公司數": len(unique_companies),
+                "元件範例": cat.get("component_examples", ""),
+                "參考PE": cat.get("reference_pe", 18),
+            }
+        )
+        for v in cat_vendors:
+            market = v.get("market", "TW")
+            detail_rows.append(
+                {
+                    "供應鏈環節": category_short_name(cat["name"]),
+                    "公司": v["company"],
+                    "代號": v["ticker"],
+                    "市場": "上市" if market == "TW" else "上櫃",
+                    "元件範例": cat.get("component_examples", ""),
+                }
+            )
+
+    dist_df = pd.DataFrame(cat_rows).sort_values("觀察公司數", ascending=True)
+    fig = go.Figure(
+        go.Bar(
+            x=dist_df["觀察公司數"],
+            y=dist_df["供應鏈環節"],
+            orientation="h",
+            marker_color="#2563eb",
+            text=dist_df["觀察公司數"],
+            textposition="outside",
+            hovertemplate="%{y}<br>觀察公司數：%{x}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        height=380,
+        margin=dict(l=20, r=40, t=20, b=20),
+        xaxis_title="觀察公司數",
+        yaxis_title=None,
+        showlegend=False,
+    )
+    st.plotly_chart(fig, use_container_width=True, key="component_distribution_chart")
+
+    total_unique = len({v["company"] for v in vendors})
+    c1, c2, c3 = st.columns(3)
+    c1.metric("供應鏈環節", len(categories))
+    c2.metric("觀察公司", total_unique)
+    c3.metric("觀察關係", len(vendors), help="同一家公司可同時屬於多個供應鏈環節")
+
+    st.markdown("#### 各環節元件與公司")
+    st.dataframe(
+        pd.DataFrame(cat_rows).sort_values("觀察公司數", ascending=False),
+        hide_index=True,
+        use_container_width=True,
+        key="component_category_summary",
+    )
+
+    selected = st.selectbox(
+        "查看環節公司",
+        options=[r["供應鏈環節"] for r in cat_rows],
+        index=0,
+    )
+    detail_df = pd.DataFrame(detail_rows)
+    st.dataframe(
+        detail_df[detail_df["供應鏈環節"] == selected][["公司", "代號", "市場", "元件範例"]],
+        hide_index=True,
+        use_container_width=True,
+        key="component_company_detail",
+    )
+
     if (ASSETS / "robot_components.png").exists():
-        st.image(str(ASSETS / "robot_components.png"), use_container_width=True)
-    st.caption("完整供應鏈與股價指標請至「供應鏈總覽」分頁查看。")
+        with st.expander("靜態元件示意圖"):
+            st.image(str(ASSETS / "robot_components.png"), use_container_width=True)
+
+
+def _latest_holdings_snapshot(rows: list[dict]) -> list[dict]:
+    latest_by_broker: dict[str, str] = {}
+    for row in rows:
+        broker = row.get("broker")
+        snapshot = row.get("snapshot_date")
+        if not broker or not snapshot:
+            continue
+        latest_by_broker[broker] = max(snapshot, latest_by_broker.get(broker, snapshot))
+    return [r for r in rows if r.get("snapshot_date") == latest_by_broker.get(r.get("broker"))]
+
+
+def _fmt_num(value, digits: int = 0) -> str:
+    if value is None or pd.isna(value):
+        return "—"
+    return f"{float(value):,.{digits}f}"
+
+
+def render_portfolio_area():
+    st.subheader("💼 我的投資專區")
+    st.caption("資料來自已匯入的券商報表；畫面只顯示券商名稱，不顯示帳號。")
+
+    try:
+        client = db_client()
+        holdings = fetch_portfolio_holdings(client)
+        realized = fetch_portfolio_realized_trades(client)
+        dividends = fetch_portfolio_dividends(client)
+    except Exception as exc:
+        st.error(f"讀取投資帳戶資料失敗：{exc}")
+        return
+
+    if not holdings and not realized and not dividends:
+        st.info("尚無投資帳戶資料，請先執行匯入。")
+        return
+
+    brokers = sorted({r.get("broker") for r in holdings + realized + dividends if r.get("broker")})
+    selected_brokers = st.multiselect("券商", brokers, default=brokers)
+    holdings = [r for r in holdings if r.get("broker") in selected_brokers]
+    realized = [r for r in realized if r.get("broker") in selected_brokers]
+    dividends = [r for r in dividends if r.get("broker") in selected_brokers]
+
+    latest_holdings = _latest_holdings_snapshot(holdings)
+    total_market = sum(float(r.get("market_value") or 0) for r in latest_holdings)
+    total_cost = sum(float(r.get("cost_basis") or 0) for r in latest_holdings)
+    total_unrealized = sum(float(r.get("unrealized_pnl") or 0) for r in latest_holdings)
+    total_realized = sum(float(r.get("realized_pnl") or 0) for r in realized)
+    total_dividends = sum(float(r.get("dividend_income") or 0) for r in dividends)
+
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("目前市值", _fmt_num(total_market))
+    m2.metric("付出成本", _fmt_num(total_cost))
+    m3.metric("未實現損益", _fmt_num(total_unrealized))
+    m4.metric("已實現資本利得", _fmt_num(total_realized))
+    m5.metric("股利所得", _fmt_num(total_dividends), help="待匯入股利試算/入帳檔後顯示")
+
+    if latest_holdings:
+        st.markdown("#### 目前庫存 / 即時未實現損益")
+        hdf = pd.DataFrame(latest_holdings)
+        hdf_view = hdf[
+            [
+                "broker",
+                "snapshot_date",
+                "symbol",
+                "stock_name",
+                "quantity",
+                "market_price",
+                "market_value",
+                "cost_basis",
+                "unrealized_pnl",
+                "return_pct",
+            ]
+        ].rename(
+            columns={
+                "broker": "券商",
+                "snapshot_date": "日期",
+                "symbol": "代號",
+                "stock_name": "名稱",
+                "quantity": "股數",
+                "market_price": "現價",
+                "market_value": "市值",
+                "cost_basis": "成本",
+                "unrealized_pnl": "未實現損益",
+                "return_pct": "報酬率%",
+            }
+        )
+        st.dataframe(hdf_view, hide_index=True, use_container_width=True, key="portfolio_holdings")
+
+        by_broker = (
+            hdf.groupby("broker", as_index=False)
+            .agg({"market_value": "sum", "cost_basis": "sum", "unrealized_pnl": "sum"})
+            .rename(
+                columns={
+                    "broker": "券商",
+                    "market_value": "市值",
+                    "cost_basis": "成本",
+                    "unrealized_pnl": "未實現損益",
+                }
+            )
+        )
+        st.markdown("#### 券商庫存彙總")
+        st.dataframe(by_broker, hide_index=True, use_container_width=True, key="portfolio_broker_summary")
+
+    if realized:
+        st.markdown("#### 已實現損益（資本利得）")
+        rdf = pd.DataFrame(realized)
+        rdf["月份"] = pd.to_datetime(rdf["trade_date"]).dt.to_period("M").astype(str)
+        monthly = (
+            rdf.groupby(["月份", "broker"], as_index=False)["realized_pnl"]
+            .sum()
+            .rename(columns={"broker": "券商", "realized_pnl": "資本利得"})
+            .sort_values("月份")
+        )
+        fig = go.Figure()
+        for broker in monthly["券商"].unique():
+            part = monthly[monthly["券商"] == broker]
+            fig.add_bar(x=part["月份"], y=part["資本利得"], name=broker)
+        fig.update_layout(
+            barmode="group",
+            height=360,
+            margin=dict(l=20, r=20, t=20, b=20),
+            yaxis_title="資本利得",
+            xaxis_title="月份",
+        )
+        st.plotly_chart(fig, use_container_width=True, key="portfolio_realized_monthly")
+
+        rdf_view = rdf[
+            [
+                "broker",
+                "trade_date",
+                "symbol",
+                "stock_name",
+                "quantity",
+                "sell_price",
+                "buy_amount",
+                "sell_amount",
+                "realized_pnl",
+                "return_pct",
+            ]
+        ].rename(
+            columns={
+                "broker": "券商",
+                "trade_date": "交易日",
+                "symbol": "代號",
+                "stock_name": "名稱",
+                "quantity": "股數",
+                "sell_price": "賣出價",
+                "buy_amount": "買入成本",
+                "sell_amount": "賣出所得",
+                "realized_pnl": "已實現損益",
+                "return_pct": "報酬率%",
+            }
+        )
+        st.dataframe(rdf_view, hide_index=True, use_container_width=True, key="portfolio_realized")
+
+    if dividends:
+        st.markdown("#### 股利所得")
+        st.dataframe(pd.DataFrame(dividends), hide_index=True, use_container_width=True, key="portfolio_dividends")
+    else:
+        st.caption("股利所得尚未匯入；收到股利試算/入帳檔後會併入月報。")
 
 
 def render_about():
@@ -660,7 +905,7 @@ def main():
         return
 
     _suppress_clear_cache_hotkey()
-    pages = ["📊 供應鏈總覽", "🤖 元件分布", "📈 個股深度", "❓ 說明"]
+    pages = ["📊 供應鏈總覽", "🤖 元件分布", "💼 我的投資專區", "📈 個股深度", "❓ 說明"]
     if "page" not in st.session_state:
         st.session_state.page = pages[0]
 
@@ -686,6 +931,8 @@ def main():
     elif page == pages[1]:
         render_component_map()
     elif page == pages[2]:
+        render_portfolio_area()
+    elif page == pages[3]:
         if selected_ticker:
             render_stock_detail(selected_ticker, meta)
         else:

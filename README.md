@@ -13,7 +13,7 @@
 
 | 服務 | 網址 |
 |------|------|
-| Dashboard（雲端） | https://botchainvision.streamlit.app |
+| Dashboard（雲端） | https://botchainvision-hjt5whpawkhwwwmvfj7dbg.streamlit.app |
 | Dashboard（本機） | http://localhost:8501 |
 | Supabase | https://supabase.com/dashboard/project/verzhajfabdmnkmedjfo |
 | GitHub | https://github.com/tuchenglife/BotChainVision |

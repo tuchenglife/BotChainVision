@@ -25,6 +25,7 @@ SUPABASE_SERVICE_ROLE_KEY = "你的_service_role_key"
 6. **記下部署網址**（通常類似以下之一）
    - `https://botchainvision.streamlit.app`
    - `https://tuchenglife-botchainvision-app-streamlit-app-xxx.streamlit.app`
+   - 目前實際網址：`https://botchainvision-hjt5whpawkhwwwmvfj7dbg.streamlit.app`
 
 7. **更新文件**：將實際網址寫入 `docs/USER_GUIDE.md` 與 `README.md`
 

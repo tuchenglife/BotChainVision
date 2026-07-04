@@ -10,7 +10,7 @@
 | 服務 | 網址 | 用途 | 登入方式 |
 |------|------|------|----------|
 | **Dashboard（本機）** | http://localhost:8501 | 開發／本機瀏覽 | 無需登入 |
-| **Dashboard（雲端）** | https://botchainvision.streamlit.app | 正式使用（手機/任何裝置） | 無需登入（首次需部署，見下方） |
+| **Dashboard（雲端）** | https://botchainvision-hjt5whpawkhwwwmvfj7dbg.streamlit.app | 正式使用（手機/任何裝置） | 無需登入（首次需部署，見下方） |
 | **Supabase 資料庫** | https://supabase.com/dashboard/project/verzhajfabdmnkmedjfo | 查看資料表、SQL、API 金鑰 | GitHub / Email 登入 Supabase |
 | **GitHub 程式庫** | https://github.com/tuchenglife/BotChainVision | 原始碼、Actions 排程 | GitHub 帳號 `tuchenglife` |
 | **GitHub Actions** | https://github.com/tuchenglife/BotChainVision/actions | 手動/查看每日同步 | GitHub 登入 |
@@ -36,7 +36,7 @@
 瀏覽器前往：
 
 ```
-https://botchainvision.streamlit.app
+https://botchainvision-hjt5whpawkhwwwmvfj7dbg.streamlit.app
 ```
 
 若尚未部署，請先完成下方「首次部署 Streamlit Cloud」。

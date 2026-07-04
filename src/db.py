@@ -137,6 +137,42 @@ def fetch_eps(client: Client, ticker: str) -> list[dict]:
     )
 
 
+def fetch_portfolio_holdings(client: Client) -> list[dict]:
+    return (
+        client.table("portfolio_holdings")
+        .select("*")
+        .order("snapshot_date", desc=True)
+        .order("broker", desc=False)
+        .execute()
+        .data
+        or []
+    )
+
+
+def fetch_portfolio_realized_trades(client: Client) -> list[dict]:
+    return (
+        client.table("portfolio_realized_trades")
+        .select("*")
+        .order("trade_date", desc=True)
+        .order("broker", desc=False)
+        .execute()
+        .data
+        or []
+    )
+
+
+def fetch_portfolio_dividends(client: Client) -> list[dict]:
+    return (
+        client.table("portfolio_dividends")
+        .select("*")
+        .order("ex_dividend_date", desc=True)
+        .order("broker", desc=False)
+        .execute()
+        .data
+        or []
+    )
+
+
 def latest_sync(client: Client) -> dict | None:
     rows = (
         client.table("sync_log")
